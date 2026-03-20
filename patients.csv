@@ -1,9 +1,6 @@
 patient_id,patient_name,age,gender,phone,medication_name,dosage,frequency,schedule_times,prescribed_by,prescribed_date,end_date
-P001,Alice Mugisha,34,Female,0788123456,Paracetamol,500mg,Twice daily,"08:00,20:00",Dr. Kamali,2026-03-01,2026-04-01
-P001,Alice Mugisha,34,Female,0788123456,Amoxicillin,250mg,Three times daily,"07:00,13:00,19:00",Dr. Kamali,2026-03-01,2026-03-10
-P002,Jean Pierre Habimana,45,Male,0722456789,Metformin,850mg,Once daily,"07:30",Dr. Uwimana,2026-02-20,2026-05-20
-P002,Jean Pierre Habimana,45,Male,0722456789,Lisinopril,5mg,Once daily,"08:00",Dr. Uwimana,2026-02-20,2026-08-20
-P003,Marie Claire Uwase,28,Female,0733987654,Ibuprofen,400mg,Twice daily,"09:00,21:00",Dr. Niyomugabo,2026-03-10,2026-03-24
-P004,Eric Nkurunziza,52,Male,0788654321,Atorvastatin,10mg,Once daily,"21:00",Dr. Kamali,2026-03-20,2026-09-20
-P005,Grace Iradukunda,60,Female,0722111222,Omeprazole,20mg,Once daily,"07:00",Dr. Niyomugabo,2026-04-05,2026-07-05
-P005,Grace Iradukunda,60,Female,0722111222,Cetirizine,10mg,Once daily,"22:00",Dr. Niyomugabo,2026-04-05,2026-05-05
+P001,Griphen Mweene,54,Male,0788123456,Paracetamol,500mg,Twice daily,"08:00,20:00",Dr. Kamali,2026-03-01,2026-04-01
+P002,Paulline miyenda,34,Female,0788123456,Amoxicillin,250mg,Three times daily,"07:00,13:00,19:00",Dr. Kamali,2026-03-01,2026-03-10
+P003,Nziza Gahima,45,Male,0722456789,Metformin,850mg,Once daily,"07:30",Dr. Uwimana,2026-02-20,2026-05-20
+P004,Tobi Jeremiah,45,Male,0722456789,Lisinopril,5mg,Once daily,"08:00",Dr. Uwimana,2026-02-20,2026-08-20
+P005,Tendai Mthakiwa,28,Female,0733987654,Ibuprofen,400mg,Twice daily,"09:00,21:00",Dr. Niyomugabo,2026-03-10,2026-03-24
