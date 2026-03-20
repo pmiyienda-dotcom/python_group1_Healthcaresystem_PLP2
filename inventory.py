@@ -23,15 +23,14 @@ def view_inventory():
         print("No medications found in inventory.")
         return
 
-    print("\n" + "=" * 70)
+    print("\n")
     print(f"{'MEDICATION':<20} {'DOSAGE':<10} {'QUANTITY':<10} {'EXPIRY DATE':<15} {'MIN STOCK'}")
-    print("=" * 70)
 
     for med in inventory:
         print(f"{med['medication_name']:<20} {med['dosage']:<10} {med['quantity']:<10} "
               f"{med['expiration_date']:<15} {med['low_stock_threshold']}")
 
-    print("=" * 70 + "\n")
+    print("\n")
 
 #  FEATURE 2: ADD A NEW MEDICATION
 
@@ -128,7 +127,6 @@ def check_low_stock():
         for med in low_stock_items:
             print(f"  {med['medication_name']} — Only {med['quantity']} left "
                   f"(minimum: {med['low_stock_threshold']})")
-        print("-" * 45 + "\n")
 
 
 #  FEATURE 6: CHECK EXPIRATION DATES
@@ -156,17 +154,14 @@ def check_expiration():
 
     if already_expired:
         print("\n EXPIRED MEDICATIONS:")
-        print("-" * 45)
         for med in already_expired:
             print(f"  {med['medication_name']} expired on {med['expiration_date']}!")
-        print("-" * 45)
 
     if expiring_soon:
         print("\n EXPIRING SOON (within 90 days):")
-        print("-" * 45)
         for med, days in expiring_soon:
             print(f"  {med['medication_name']} — expires {med['expiration_date']} ({days} days left)")
-        print("-" * 45 + "\n")
+        print("\n")
 
     if not already_expired and not expiring_soon:
         print("No medications are expiring soon.\n")
@@ -180,14 +175,12 @@ def inventory_menu():
     Called by main.py after the pharmacist logs in.
     """
     # Automatically run checks when pharmacist opens inventory
-    print("\n🔔 Running automatic inventory checks...")
+    print("\n Running automatic inventory checks...")
     check_low_stock()
     check_expiration()
 
     while True:
-        print("=" * 40)
         print("       INVENTORY MANAGEMENT MENU")
-        print("=" * 40)
         print("1. View all medications")
         print("2. Add a new medication")
         print("3. Update medication quantity")
@@ -195,7 +188,6 @@ def inventory_menu():
         print("5. Check low stock warnings")
         print("6. Check expiration dates")
         print("7. Back to main menu")
-        print("=" * 40)
 
         choice = input("Enter your choice (1-7): ").strip()
 
