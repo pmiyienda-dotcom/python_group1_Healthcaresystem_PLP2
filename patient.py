@@ -208,7 +208,7 @@ def acknowledge_dose(patient_name):
             p["acknowledged_dates"].append(dose_key)
             save_prescriptions(all_prescriptions)
 
-            print(f"\n  ✔  Dose acknowledged: {med_name} {p['dosage']} at {dose_time} — {today_str}")
+            print(f"\n Dose acknowledged: {med_name} {p['dosage']} at {dose_time} — {today_str}")
             print("  Your record has been updated. Well done for staying on track!\n")
             found = True
             break

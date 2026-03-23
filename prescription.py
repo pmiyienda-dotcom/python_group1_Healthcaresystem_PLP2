@@ -77,7 +77,7 @@ def add_prescription():
         except:
             print("⚠ Could not update inventory.")
 
-    print("✅ Prescription added successfully!")
+    print(" Prescription added successfully!")
 
 
 
@@ -117,12 +117,12 @@ def check_reminders(patient_id):
 
             for t in times:
                 if t.strip() == current_time:
-                    print(f"⏰ TAKE NOW: {p['medication_name']} ({p['dosage']})")
+                    print(f" TAKE NOW: {p['medication_name']} ({p['dosage']})")
 
     if not found:
         print("No prescriptions found.")
 
-    print("✔ Reminder check complete.")
+    print(" Reminder check complete.")
 
 
 # SIMPLE TEST MENU

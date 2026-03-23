@@ -1,6 +1,7 @@
 import csv
 from datetime import datetime
 import time
+
 FILE = "patients.csv"
 
 #Reading the patients from patients.csv
