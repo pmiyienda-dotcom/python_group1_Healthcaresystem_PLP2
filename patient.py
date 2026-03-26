@@ -1,43 +1,145 @@
 
-# This file handles all patient-facing features of the Medication Management System.
-# Patients can view their medication schedule, check reminders, and acknowledge doses.
+# patient.py
+# Handles patient management: adding patients, assigning medications,
+# viewing schedules, reminders, and dose acknowledgment.
 
-import json
-import os
 from datetime import datetime, date, timedelta
+from database import get_connection
 
-# ─────────────────────────────────────────────
-#  DATA FILE PATH
-# ─────────────────────────────────────────────
-
-PRESCRIPTIONS_FILE = "prescriptions.json"
-
-
-# ─────────────────────────────────────────────
-#  HELPER: LOAD PRESCRIPTIONS FROM FILE
-# ─────────────────────────────────────────────
-
-def load_prescriptions():
-    """
-    Loads all prescriptions from the JSON data file.
-    Returns an empty list if the file does not exist yet.
-    """
-    if not os.path.exists(PRESCRIPTIONS_FILE):
-        return []
-    with open(PRESCRIPTIONS_FILE, "r") as f:
-        return json.load(f)
+def _err(msg):
+    """Prints a visible error message on the command line."""
+    print()
+    print("  !! ERROR: " + msg)
+    print()
 
 
 # ─────────────────────────────────────────────
-#  HELPER: SAVE PRESCRIPTIONS TO FILE
+#  ENSURE TABLES EXIST
 # ─────────────────────────────────────────────
 
-def save_prescriptions(prescriptions):
-    """
-    Saves the updated prescriptions list back to the JSON data file.
-    """
-    with open(PRESCRIPTIONS_FILE, "w") as f:
-        json.dump(prescriptions, f, indent=4)
+def _ensure_tables():
+    try:
+        conn   = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS prescriptions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                patient_name VARCHAR(255) NOT NULL,
+                medication_name VARCHAR(255) NOT NULL,
+                dosage VARCHAR(100),
+                frequency VARCHAR(100),
+                schedule_times VARCHAR(255),
+                prescribed_by VARCHAR(255),
+                prescribed_date DATE,
+                end_date DATE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS acknowledged_doses (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                patient_name VARCHAR(255) NOT NULL,
+                medication_name VARCHAR(255) NOT NULL,
+                dose_key VARCHAR(20) NOT NULL,
+                UNIQUE KEY unique_dose (patient_name, medication_name, dose_key)
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        _err(f"Could not set up database tables: {e}")
+
+
+# ─────────────────────────────────────────────
+#  FEATURE 1: ADD NEW PATIENT
+# ─────────────────────────────────────────────
+
+def add_patient():
+    _ensure_tables()
+    print("\n  --- ADD NEW PATIENT ---")
+    patient_id = input("  Patient ID        : ").strip()
+    name       = input("  Patient full name : ").strip()
+    age        = input("  Age               : ").strip()
+    gender     = input("  Gender            : ").strip()
+    phone      = input("  Phone number      : ").strip()
+
+    if not patient_id or not name:
+        _err("Patient ID and full name cannot be empty.")
+        return
+
+    if age and not age.isdigit():
+        _err(f"Age must be a whole number. You entered: '{age}'")
+        return
+
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO patients (patient_id, patient_name, age, gender, phone) VALUES (%s, %s, %s, %s, %s)",
+            (patient_id, name, int(age) if age else None, gender or None, phone or None)
+        )
+        conn.commit()
+        cursor.close()
+        print(f"\n  Patient '{name}' (ID: {patient_id}) added successfully!\n")
+    except Exception as e:
+        _err(f"Failed to add patient '{name}': {e}")
+    finally:
+        conn.close()
+
+
+# ─────────────────────────────────────────────
+#  FEATURE 2: ASSIGN MEDICATION TO PATIENT
+# ─────────────────────────────────────────────
+
+def assign_medication():
+    _ensure_tables()
+    print("\n  --- ASSIGN MEDICATION TO PATIENT ---")
+    patient_name    = input("  Patient name                        : ").strip()
+    medication_name = input("  Medication name                     : ").strip()
+    dosage          = input("  Dosage (e.g. 500mg)                 : ").strip()
+    frequency       = input("  Frequency (e.g. Twice daily)        : ").strip()
+    schedule_times  = input("  Schedule times (e.g. 08:00,20:00)   : ").strip()
+    prescribed_by   = input("  Prescribed by                       : ").strip()
+    end_date        = input("  End date (YYYY-MM-DD)               : ").strip()
+
+    if not patient_name or not medication_name:
+        _err("Patient name and medication name cannot be empty.")
+        return
+
+    validated_end_date = None
+    if end_date:
+        try:
+            parsed = datetime.strptime(end_date, "%Y-%m-%d").date()
+            if parsed.year < 1000 or parsed.year > 9999:
+                _err(f"Invalid year in end date: {parsed.year}. Must be between 1000 and 9999.")
+                return
+            if parsed < date.today():
+                _err(f"End date '{end_date}' is in the past. Please enter a future date.")
+                return
+            validated_end_date = end_date
+        except ValueError:
+            _err(f"Invalid date format '{end_date}'. Use YYYY-MM-DD (e.g. 2025-12-31).")
+            return
+
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO prescriptions
+                (patient_name, medication_name, dosage, frequency,
+                 schedule_times, prescribed_by, prescribed_date, end_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            patient_name, medication_name, dosage, frequency,
+            schedule_times, prescribed_by, date.today().isoformat(), validated_end_date
+        ))
+        conn.commit()
+        cursor.close()
+        print(f"\n  Medication '{medication_name}' assigned to '{patient_name}' successfully!\n")
+    except Exception as e:
+        _err(f"Failed to assign medication '{medication_name}' to '{patient_name}': {e}")
+    finally:
+        conn.close()
 
 
 # ─────────────────────────────────────────────
@@ -45,241 +147,216 @@ def save_prescriptions(prescriptions):
 # ─────────────────────────────────────────────
 
 def get_patient_prescriptions(patient_name):
-    """
-    Returns a list of all prescriptions assigned to the given patient.
-    Matching is case-insensitive.
-    """
-    prescriptions = load_prescriptions()
-    return [p for p in prescriptions if p["patient_name"].lower() == patient_name.lower()]
+    _ensure_tables()
+    conn = get_connection()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM prescriptions WHERE LOWER(patient_name) = LOWER(%s)",
+            (patient_name,)
+        )
+        rows = cursor.fetchall()
+        cursor.execute(
+            "SELECT medication_name, dose_key FROM acknowledged_doses WHERE LOWER(patient_name) = LOWER(%s)",
+            (patient_name,)
+        )
+        ack_rows = cursor.fetchall()
+        cursor.close()
+    except Exception as e:
+        _err(f"Could not load prescriptions for '{patient_name}': {e}")
+        return []
+    finally:
+        conn.close()
+
+    ack_map = {}
+    for ack in ack_rows:
+        ack_map.setdefault(ack["medication_name"].lower(), []).append(ack["dose_key"])
+
+    result = []
+    for row in rows:
+        times_raw = row.get("schedule_times", "") or ""
+        result.append({
+            "patient_name"      : row["patient_name"],
+            "medication_name"   : row["medication_name"],
+            "dosage"            : row.get("dosage", ""),
+            "frequency"         : row.get("frequency", ""),
+            "schedule_times"    : [t.strip() for t in times_raw.split(",") if t.strip()],
+            "acknowledged_dates": ack_map.get(row["medication_name"].lower(), []),
+        })
+    return result
 
 
 # ─────────────────────────────────────────────
-#  FEATURE 1: VIEW MEDICATION SCHEDULE
+#  FEATURE 3: VIEW MEDICATION SCHEDULE
 # ─────────────────────────────────────────────
 
 def view_medication_schedule(patient_name):
-    """
-    Displays all medications currently prescribed to the patient,
-    including drug name, dosage, frequency, and schedule times.
-    """
-    patient_prescriptions = get_patient_prescriptions(patient_name)
-
-    if not patient_prescriptions:
+    prescriptions = get_patient_prescriptions(patient_name)
+    if not prescriptions:
         print(f"\n  No prescriptions found for '{patient_name}'.")
-        print("  Please contact your pharmacist if you believe this is an error.\n")
+        print("  Please contact your pharmacist.\n")
         return
 
     print(f"\n  MEDICATION SCHEDULE FOR: {patient_name.upper()}")
-    print("  " + "─" * 60)
-    print(f"  {'MEDICATION':<20} {'DOSAGE':<10} {'FREQUENCY':<15} {'TIMES'}")
-    print("  " + "─" * 60)
-
-    for p in patient_prescriptions:
-        times = ", ".join(p.get("schedule_times", []))
-        print(f"  {p['medication_name']:<20} {p['dosage']:<10} {p['frequency']:<15} {times}")
-
-    print("  " + "─" * 60)
-    print(f"  Total medications prescribed: {len(patient_prescriptions)}\n")
+    print("  " + "-" * 65)
+    print(f"  {'MEDICATION':<20} {'DOSAGE':<10} {'FREQUENCY':<18} {'TIMES'}")
+    print("  " + "-" * 65)
+    for p in prescriptions:
+        times = ", ".join(p["schedule_times"])
+        print(f"  {p['medication_name']:<20} {p['dosage']:<10} {p['frequency']:<18} {times}")
+    print("  " + "-" * 65)
+    print(f"  Total medications: {len(prescriptions)}\n")
 
 
 # ─────────────────────────────────────────────
-#  FEATURE 2: CHECK REMINDERS (DUE & MISSED DOSES)
+#  FEATURE 4: CHECK REMINDERS
 # ─────────────────────────────────────────────
 
 def check_reminders(patient_name):
-    """
-    Checks the patient's prescription schedule and shows:
-    - Doses due within the next 2 hours (upcoming reminders)
-    - Doses that were missed (scheduled time has passed and not acknowledged today)
-    """
-    patient_prescriptions = get_patient_prescriptions(patient_name)
-
-    if not patient_prescriptions:
+    prescriptions = get_patient_prescriptions(patient_name)
+    if not prescriptions:
         print(f"\n  No prescriptions found for '{patient_name}'.\n")
         return
 
-    now = datetime.now()
+    now       = datetime.now()
     today_str = date.today().isoformat()
-    upcoming = []
-    missed = []
+    upcoming  = []
+    missed    = []
 
-    for p in patient_prescriptions:
-        schedule_times = p.get("schedule_times", [])
-        acknowledged_dates = p.get("acknowledged_dates", [])  # List of "YYYY-MM-DD HH:MM" strings
-
-        for time_str in schedule_times:
+    for p in prescriptions:
+        for time_str in p["schedule_times"]:
             try:
-                # Build a full datetime for today's scheduled dose
                 scheduled_dt = datetime.strptime(f"{today_str} {time_str}", "%Y-%m-%d %H:%M")
             except ValueError:
+                _err(f"Skipping invalid schedule time '{time_str}' for {p['medication_name']}.")
                 continue
 
-            # Check if this specific dose (date + time) has already been acknowledged
             dose_key = f"{today_str} {time_str}"
-            already_acknowledged = dose_key in acknowledged_dates
-
-            if already_acknowledged:
-                continue  # Skip — patient already confirmed this dose
+            if dose_key in p["acknowledged_dates"]:
+                continue
 
             minutes_until = (scheduled_dt - now).total_seconds() / 60
-
             if -120 <= minutes_until < 0:
-                # Dose time has passed within the last 2 hours → missed
                 missed.append((p["medication_name"], p["dosage"], time_str))
             elif 0 <= minutes_until <= 120:
-                # Dose is due within the next 2 hours → upcoming
                 upcoming.append((p["medication_name"], p["dosage"], time_str))
 
-    # ── Display upcoming reminders ──
     if upcoming:
-        print(f"\n  ⏰  UPCOMING DOSES (due within 2 hours):")
-        print("  " + "─" * 45)
+        print(f"\n  UPCOMING DOSES (due within 2 hours):")
+        print("  " + "-" * 45)
         for name, dosage, time_str in upcoming:
-            print(f"  → {name} {dosage}  at  {time_str}")
+            print(f"  -> {name} {dosage}  at  {time_str}")
     else:
         print("\n  No upcoming doses in the next 2 hours.")
 
-    # ── Display missed doses ──
     if missed:
-        print(f"\n  ⚠️   MISSED DOSES (not yet acknowledged):")
-        print("  " + "─" * 45)
+        print(f"\n  MISSED DOSES (not yet acknowledged):")
+        print("  " + "-" * 45)
         for name, dosage, time_str in missed:
-            print(f"  ✗ {name} {dosage}  — was due at  {time_str}")
+            print(f"  x  {name} {dosage}  -- was due at  {time_str}")
         print("\n  Please acknowledge missed doses or inform your pharmacist.\n")
     else:
         print("  No missed doses recorded for today.\n")
 
 
 # ─────────────────────────────────────────────
-#  FEATURE 3: ACKNOWLEDGE A DOSE
+#  FEATURE 5: ACKNOWLEDGE A DOSE
 # ─────────────────────────────────────────────
 
 def acknowledge_dose(patient_name):
-    """
-    Allows the patient to confirm that they have taken a specific dose.
-    Records the acknowledgment in the prescriptions data file so the
-    system can track adherence and mark the dose as completed.
-    """
-    patient_prescriptions = get_patient_prescriptions(patient_name)
-
-    if not patient_prescriptions:
+    prescriptions = get_patient_prescriptions(patient_name)
+    if not prescriptions:
         print(f"\n  No prescriptions found for '{patient_name}'.\n")
         return
 
-    print(f"\n  ACKNOWLEDGE A DOSE — {patient_name.upper()}")
-    print("  " + "─" * 45)
-
-    # Show the patient their medications for easy reference
+    print(f"\n  ACKNOWLEDGE A DOSE -- {patient_name.upper()}")
+    print("  " + "-" * 45)
     print("  Your medications:")
-    for i, p in enumerate(patient_prescriptions, 1):
-        times = ", ".join(p.get("schedule_times", []))
+    for i, p in enumerate(prescriptions, 1):
+        times = ", ".join(p["schedule_times"])
         print(f"  {i}. {p['medication_name']} {p['dosage']}  (scheduled: {times})")
 
     print()
-    med_name = input("  Enter the medication name you just took: ").strip()
-    dose_time = input("  Enter the scheduled time for this dose (HH:MM): ").strip()
+    med_name  = input("  Enter the medication name you just took: ").strip()
+    dose_time = input("  Enter the scheduled time (HH:MM): ").strip()
 
-    # Find the matching prescription
-    all_prescriptions = load_prescriptions()
-    found = False
+    match = next((p for p in prescriptions if p["medication_name"].lower() == med_name.lower()), None)
+    if not match:
+        _err(f"Medication '{med_name}' not found in your prescriptions.")
+        return
 
-    for p in all_prescriptions:
-        if (p["patient_name"].lower() == patient_name.lower() and
-                p["medication_name"].lower() == med_name.lower()):
+    if dose_time not in match["schedule_times"]:
+        _err(f"'{dose_time}' is not a scheduled time for {med_name}. Scheduled times: {', '.join(match['schedule_times'])}")
+        return
 
-            # Validate the time is in their schedule
-            if dose_time not in p.get("schedule_times", []):
-                print(f"\n  '{dose_time}' is not a scheduled time for {med_name}.")
-                print(f"  Scheduled times are: {', '.join(p.get('schedule_times', []))}\n")
-                return
+    today_str = date.today().isoformat()
+    dose_key  = f"{today_str} {dose_time}"
 
-            # Build the dose key and check if already acknowledged
-            today_str = date.today().isoformat()
-            dose_key = f"{today_str} {dose_time}"
+    if dose_key in match["acknowledged_dates"]:
+        _err(f"You already acknowledged {med_name} at {dose_time} today.")
+        return
 
-            if "acknowledged_dates" not in p:
-                p["acknowledged_dates"] = []
-
-            if dose_key in p["acknowledged_dates"]:
-                print(f"\n  You have already acknowledged {med_name} at {dose_time} today.\n")
-                return
-
-            # Record the acknowledgment
-            p["acknowledged_dates"].append(dose_key)
-            save_prescriptions(all_prescriptions)
-
-            print(f"\n Dose acknowledged: {med_name} {p['dosage']} at {dose_time} — {today_str}")
-            print("  Your record has been updated. Well done for staying on track!\n")
-            found = True
-            break
-
-    if not found:
-        print(f"\n  Medication '{med_name}' was not found in your prescriptions.\n")
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT IGNORE INTO acknowledged_doses (patient_name, medication_name, dose_key) VALUES (%s, %s, %s)",
+            (patient_name, match["medication_name"], dose_key)
+        )
+        conn.commit()
+        cursor.close()
+        print(f"\n  Dose acknowledged: {match['medication_name']} {match['dosage']} at {dose_time} -- {today_str}")
+        print("  Well done for staying on track!\n")
+    except Exception as e:
+        _err(f"Could not save acknowledgment for '{med_name}': {e}")
+    finally:
+        conn.close()
 
 
 # ─────────────────────────────────────────────
-#  FEATURE 4: VIEW ADHERENCE SUMMARY (BONUS)
+#  FEATURE 6: ADHERENCE SUMMARY
 # ─────────────────────────────────────────────
 
 def view_adherence_summary(patient_name):
-    """
-    Shows a summary of how many doses the patient has acknowledged
-    over the past 7 days, giving a basic adherence overview.
-    """
-    patient_prescriptions = get_patient_prescriptions(patient_name)
-
-    if not patient_prescriptions:
+    prescriptions = get_patient_prescriptions(patient_name)
+    if not prescriptions:
         print(f"\n  No prescriptions found for '{patient_name}'.\n")
         return
 
-    print(f"\n  ADHERENCE SUMMARY (Last 7 Days) — {patient_name.upper()}")
-    print("  " + "─" * 50)
+    print(f"\n  ADHERENCE SUMMARY (Last 7 Days) -- {patient_name.upper()}")
+    print("  " + "-" * 55)
 
-    today = date.today()
+    today      = date.today()
     week_dates = [(today - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
 
-    for p in patient_prescriptions:
-        acknowledged = p.get("acknowledged_dates", [])
-        total_expected = len(p.get("schedule_times", [])) * 7
-        total_taken = sum(
-            1 for ack in acknowledged
+    for p in prescriptions:
+        total_expected = len(p["schedule_times"]) * 7
+        total_taken    = sum(
+            1 for ack in p["acknowledged_dates"]
             if any(ack.startswith(d) for d in week_dates)
         )
-
-        if total_expected == 0:
-            adherence_pct = 0
-        else:
-            adherence_pct = round((total_taken / total_expected) * 100)
-
-        bar_filled = adherence_pct // 10
-        bar = "█" * bar_filled + "░" * (10 - bar_filled)
-
+        adherence_pct = round((total_taken / total_expected) * 100) if total_expected else 0
+        bar = "X" * (adherence_pct // 10) + "-" * (10 - adherence_pct // 10)
         print(f"  {p['medication_name']:<20} [{bar}] {adherence_pct}%  ({total_taken}/{total_expected} doses)")
-
     print()
 
 
 # ─────────────────────────────────────────────
-#  PATIENT MENU (called from main.py)
+#  PATIENT MENU
 # ─────────────────────────────────────────────
 
 def patient_menu(patient_name):
-    """
-    Displays the patient-facing menu.
-    Called by main.py after the patient logs in.
-    Automatically shows reminders on entry.
-    """
-    print(f"\n  Welcome, {patient_name}!")
-    print("  Running automatic reminder check...")
-    check_reminders(patient_name)
-
+    _ensure_tables()
     while True:
-        print("         PATIENT MENU")
+        print("\n" + "=" * 50)
+        print(f"   PATIENT MENU -- {patient_name.upper()}")
+        print("=" * 50)
         print("  1. View my medication schedule")
         print("  2. Check reminders (due & missed doses)")
         print("  3. Acknowledge a dose (confirm intake)")
         print("  4. View adherence summary (last 7 days)")
         print("  5. Back to main menu")
+        print("=" * 50)
 
         choice = input("  Enter your choice (1-5): ").strip()
 
@@ -295,36 +372,13 @@ def patient_menu(patient_name):
             print("  Returning to main menu...\n")
             break
         else:
-            print("  Invalid choice. Please enter a number between 1 and 5.\n")
+            _err(f"'{choice}' is not a valid option. Please enter a number between 1 and 5.")
 
 
 # ─────────────────────────────────────────────
-#  RUN DIRECTLY (for testing only)
+#  ENTRY POINT
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
-    # Create a sample prescriptions file for testing if one doesn't exist
-    if not os.path.exists(PRESCRIPTIONS_FILE):
-        sample_data = [
-            {
-                "patient_name": "Alice",
-                "medication_name": "Paracetamol",
-                "dosage": "500mg",
-                "frequency": "Twice daily",
-                "schedule_times": ["08:00", "20:00"],
-                "acknowledged_dates": []
-            },
-            {
-                "patient_name": "Alice",
-                "medication_name": "Amoxicillin",
-                "dosage": "250mg",
-                "frequency": "Three times daily",
-                "schedule_times": ["07:00", "13:00", "19:00"],
-                "acknowledged_dates": []
-            }
-        ]
-        save_prescriptions(sample_data)
-        print("  Sample prescriptions file created for testing (prescriptions.json).")
-
-    test_name = input("  Enter patient name to test: ").strip()
-    patient_menu(test_name)
+    name = input("  Enter patient name to test: ").strip()
+    patient_menu(name)

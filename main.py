@@ -1,7 +1,15 @@
+import getpass
 import inventory
 import patient
 import prescription
 import Reminders
+from database import get_connection
+
+
+def _err(msg):
+    print()
+    print("  !! ERROR: " + msg)
+    print()
  
  
 # =============================================================
@@ -39,7 +47,6 @@ def pharmacist_login():
  
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            import getpass
             password = getpass.getpass(f"   Enter password (attempt {attempt}/{MAX_ATTEMPTS}): ")
         except Exception:
             password = input(f"   Enter password (attempt {attempt}/{MAX_ATTEMPTS}): ")
@@ -63,18 +70,39 @@ def pharmacist_login():
  
 def patient_login():
     """
-    Asks the patient for their name only.
-    No password or ID needed.
-    Returns the name string to pass to patient_menu().
+    Asks the patient for their name and checks it exists in the database.
+    Returns the name string if found, otherwise None.
     """
     print_banner("PATIENT LOGIN")
- 
+
     name = input("   Enter your full name: ").strip()
- 
+
     if not name:
         print("   No name entered. Returning to home screen.\n")
         return None
- 
+
+    # Check if patient exists in the database
+    patient._ensure_tables()
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT patient_name FROM patients WHERE LOWER(patient_name) = LOWER(%s)",
+            (name,)
+        )
+        row = cursor.fetchone()
+        cursor.close()
+    except Exception as e:
+        _err(f"Could not check patient registration: {e}")
+        return None
+    finally:
+        conn.close()
+
+    if not row:
+        print(f"\n   !! You are not registered in the system.")
+        print(f"   Please ask your pharmacist to add you first.\n")
+        return None
+
     print(f"\n   ✔  Welcome, {name}!\n")
     return name
  
@@ -98,42 +126,50 @@ def pharmacist_menu():
         print("   3. View a Patient's Prescriptions")
         print("   4. Check Patient Reminders")
         print("   5. Send All Patient Reminders")
-        print("   6. Log out")
+        print("   6. Add New Patient")
+        print("   7. Assign Medication to Patient")
+        print("   8. Log out")
         print()
- 
-        choice = input("   Select (1-6): ").strip()
- 
+
+        choice = input("   Select (1-8): ").strip()
+
         if choice == "1":
             inventory.inventory_menu()
- 
+
         elif choice == "2":
             prescription.add_prescription()
- 
+
         elif choice == "3":
-            patient_id = input("\n   Enter Patient ID to view prescriptions: ").strip()
-            if patient_id:
-                prescription.view_patient_prescriptions(patient_id)
+            name = input("\n   Enter Patient name to view prescriptions: ").strip()
+            if name:
+                prescription.view_patient_prescriptions(name)
             else:
-                print("   Please enter a valid Patient ID.")
- 
+                print("   Please enter a valid patient name.")
+
         elif choice == "4":
-            patient_id = input("\n   Enter Patient ID to check reminders: ").strip()
-            if patient_id:
-                prescription.check_reminders(patient_id)
+            name = input("\n   Enter Patient name to check reminders: ").strip()
+            if name:
+                prescription.check_reminders(name)
             else:
-                print("   Please enter a valid Patient ID.")
- 
+                print("   Please enter a valid patient name.")
+
         elif choice == "5":
             print_banner("SENDING REMINDERS TO ALL PATIENTS")
             Reminders.send_reminders()
             print()
- 
+
         elif choice == "6":
+            patient.add_patient()
+
+        elif choice == "7":
+            patient.assign_medication()
+
+        elif choice == "8":
             print("\n   Logged out. Returning to home screen...\n")
             break
- 
+
         else:
-            print("   Invalid choice. Please enter a number between 1 and 6.")
+            print("   Invalid choice. Please enter a number between 1 and 8.")
  
  
 # =============================================================

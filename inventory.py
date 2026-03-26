@@ -167,6 +167,27 @@ def check_expiration():
         print("No medications are expiring soon.\n")
 
 
+#  HELPER: CHECK STOCK (used by prescription.py)
+
+def check_stock(medication_name):
+    """Returns the current quantity of a medication. Returns 0 if not found."""
+    for med in inventory:
+        if med["medication_name"].lower() == medication_name.lower():
+            return med["quantity"]
+    return 0
+
+
+#  HELPER: REDUCE STOCK (used by prescription.py)
+
+def reduce_stock(medication_name, quantity):
+    """Reduces stock of a medication by the given quantity."""
+    for med in inventory:
+        if med["medication_name"].lower() == medication_name.lower():
+            med["quantity"] = max(0, med["quantity"] - quantity)
+            return
+    print(f"Warning: '{medication_name}' not found in inventory — stock not reduced.")
+
+
 #  INVENTORY MENU (called from main.py)
 
 def inventory_menu():

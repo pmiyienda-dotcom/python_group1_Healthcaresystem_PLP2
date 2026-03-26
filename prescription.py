@@ -1,135 +1,167 @@
-import csv
 import datetime
-
-
-# TRY TO IMPORT INVENTORY (SAFE)
+from database import get_connection
 
 try:
     from inventory import check_stock, reduce_stock
     INVENTORY_AVAILABLE = True
 except ImportError:
-    print(" Inventory functions not found. Running without inventory checks.")
     INVENTORY_AVAILABLE = False
 
 
-FILE = "patients.csv"
+def _err(msg):
+    print()
+    print("  !! ERROR: " + msg)
+    print()
 
 
-# LOAD DATA
-def load_patients():
-    try:
-        with open(FILE, mode='r', newline='') as file:
-            reader = csv.DictReader(file)
-            return list(reader)
-    except FileNotFoundError:
-        print(f"Error: '{FILE}' not found. No prescriptions on record.")
-        return []
-
-
-
-# ADD PRESCRIPTION
+# ─────────────────────────────────────────────
+#  ADD PRESCRIPTION
+# ─────────────────────────────────────────────
 
 def add_prescription():
     print("\n--- Add New Prescription ---")
 
-    patient_id = input("Enter patient ID: ")
-    patient_name = input("Enter patient name: ")
-    age = input("Enter age: ")
-    gender = input("Enter gender: ")
-    phone = input("Enter phone: ")
+    patient_name    = input("Enter patient name      : ").strip()
+    medication_name = input("Enter medication name   : ").strip()
+    dosage          = input("Enter dosage (e.g. 500mg): ").strip()
+    frequency       = input("Enter frequency (e.g. Twice daily): ").strip()
+    schedule_times  = input("Enter times (e.g. 08:00,20:00): ").strip()
+    prescribed_by   = input("Prescribed by           : ").strip()
+    end_date        = input("Enter end date (YYYY-MM-DD): ").strip()
 
-    medication_name = input("Enter medication name: ")
-    dosage = input("Enter dosage (e.g. 500mg): ")
-    frequency = input("Enter frequency (e.g. Twice daily): ")
-    schedule_times = input("Enter times (e.g. 08:00,20:00): ")
+    if not patient_name or not medication_name:
+        _err("Patient name and medication name cannot be empty.")
+        return
 
-    prescribed_by = input("Prescribed by: ")
-    prescribed_date = str(datetime.date.today())
-    end_date = input("Enter end date (YYYY-MM-DD): ")
+    validated_end_date = None
+    if end_date:
+        try:
+            parsed = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
+            if parsed < datetime.date.today():
+                _err(f"End date '{end_date}' is in the past. Enter a future date.")
+                return
+            validated_end_date = end_date
+        except ValueError:
+            _err(f"Invalid date format '{end_date}'. Use YYYY-MM-DD (e.g. 2025-12-31).")
+            return
 
-    quantity = int(input("Enter quantity needed: "))
+    quantity_input = input("Enter quantity needed   : ").strip()
+    if not quantity_input.isdigit():
+        _err(f"Quantity must be a whole number. You entered: '{quantity_input}'")
+        return
+    quantity = int(quantity_input)
 
-   
-    # INVENTORY CHECK (IF AVAILABLE)
-   
     if INVENTORY_AVAILABLE:
         try:
-            if check_stock(medication_name) < quantity:
-                print("⚠ Not enough stock!")
+            stock = check_stock(medication_name)
+            if stock < quantity:
+                _err(f"Not enough stock for '{medication_name}'. Available: {stock}, Required: {quantity}")
                 return
-        except:
-            print("⚠ Inventory check failed, continuing anyway...")
+        except Exception as e:
+            _err(f"Inventory check failed for '{medication_name}': {e}. Continuing anyway.")
 
-    
-    # SAVE TO CSV
-    
-    with open(FILE, mode='a', newline='') as file:
-        writer = csv.writer(file)
+    prescribed_date = str(datetime.date.today())
 
-        writer.writerow([
-            patient_id, patient_name, age, gender, phone,
-            medication_name, dosage, frequency, schedule_times,
-            prescribed_by, prescribed_date, end_date
-        ])
+    try:
+        conn   = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO prescriptions
+                (patient_name, medication_name, dosage, frequency,
+                 schedule_times, prescribed_by, prescribed_date, end_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            patient_name, medication_name, dosage, frequency,
+            schedule_times, prescribed_by, prescribed_date, validated_end_date
+        ))
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        _err(f"Failed to save prescription for '{patient_name}': {e}")
+        return
 
-   
-    # REDUCE STOCK (IF AVAILABLE)
-    
     if INVENTORY_AVAILABLE:
         try:
             reduce_stock(medication_name, quantity)
-        except:
-            print("⚠ Could not update inventory.")
+        except Exception as e:
+            _err(f"Could not reduce stock for '{medication_name}': {e}")
 
-    print(" Prescription added successfully!")
+    print("Prescription added successfully!")
 
 
+# ─────────────────────────────────────────────
+#  VIEW PRESCRIPTIONS
+# ─────────────────────────────────────────────
 
-# VIEW PRESCRIPTIONS
-
-def view_patient_prescriptions(patient_id):
-    patients = load_patients()
-    found = False
-
+def view_patient_prescriptions(patient_name):
     print("\n--- Medication Schedule ---")
+    try:
+        conn   = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM prescriptions WHERE LOWER(patient_name) = LOWER(%s)",
+            (patient_name,)
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        _err(f"Could not load prescriptions for '{patient_name}': {e}")
+        return
 
-    for p in patients:
-        if p["patient_id"] == patient_id:
-            found = True
-            print(f"\nPatient: {p['patient_name']}")
-            print(f"Drug: {p['medication_name']}")
-            print(f"Dosage: {p['dosage']}")
-            print(f"Frequency: {p['frequency']}")
-            print(f"Times: {p['schedule_times']}")
-            print(f"End Date: {p['end_date']}")
+    if not rows:
+        print(f"No prescriptions found for '{patient_name}'.")
+        return
 
-    if not found:
-        print("No prescriptions found.")
-# REMINDER SYSTEM
-def check_reminders(patient_id):
-    patients = load_patients()
+    for p in rows:
+        print(f"\nPatient  : {p['patient_name']}")
+        print(f"Drug     : {p['medication_name']}")
+        print(f"Dosage   : {p['dosage']}")
+        print(f"Frequency: {p['frequency']}")
+        print(f"Times    : {p['schedule_times']}")
+        print(f"End Date : {p['end_date']}")
+
+
+# ─────────────────────────────────────────────
+#  REMINDER CHECK (pharmacist view)
+# ─────────────────────────────────────────────
+
+def check_reminders(patient_name):
+    print("\n--- Medication Reminders ---")
     current_time = datetime.datetime.now().strftime("%H:%M")
 
-    print("\n--- Medication Reminders ---")
+    try:
+        conn   = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM prescriptions WHERE LOWER(patient_name) = LOWER(%s)",
+            (patient_name,)
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        _err(f"Could not load reminders for '{patient_name}': {e}")
+        return
 
-    found = False
+    if not rows:
+        print(f"No prescriptions found for '{patient_name}'.")
+        return
 
-    for p in patients:
-        if p["patient_id"] == patient_id:
-            found = True
-            times = p["schedule_times"].split(",")
+    for p in rows:
+        times = [t.strip() for t in (p.get("schedule_times") or "").split(",") if t.strip()]
+        for t in times:
+            if t == current_time:
+                print(f"TAKE NOW: {p['medication_name']} ({p['dosage']})")
 
-            for t in times:
-                if t.strip() == current_time:
-                    print(f" TAKE NOW: {p['medication_name']} ({p['dosage']})")
-
-    if not found:
-        print("No prescriptions found.")
-
-    print(" Reminder check complete.")
+    print("Reminder check complete.")
 
 
-# SIMPLE TEST MENU
+# ─────────────────────────────────────────────
+#  STANDALONE TEST MENU
+# ─────────────────────────────────────────────
+
 if __name__ == "__main__":
     while True:
         print("\n--- Prescription System ---")
@@ -138,22 +170,18 @@ if __name__ == "__main__":
         print("3. Check Reminders")
         print("4. Exit")
 
-        choice = input("Choose an option: ")
+        choice = input("Choose an option: ").strip()
 
         if choice == "1":
             add_prescription()
-
         elif choice == "2":
-            pid = input("Enter patient ID: ")
-            view_patient_prescriptions(pid)
-
+            name = input("Enter patient name: ").strip()
+            view_patient_prescriptions(name)
         elif choice == "3":
-            pid = input("Enter patient ID: ")
-            check_reminders(pid)
-
+            name = input("Enter patient name: ").strip()
+            check_reminders(name)
         elif choice == "4":
             print("Exiting...")
             break
-
         else:
-            print("Invalid option.")
+            _err(f"'{choice}' is not a valid option. Please enter 1, 2, 3, or 4.")
