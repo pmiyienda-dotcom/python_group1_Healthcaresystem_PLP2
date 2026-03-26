@@ -17,9 +17,13 @@ FILE = "patients.csv"
 
 # LOAD DATA
 def load_patients():
-    with open(FILE, mode='r', newline='') as file:
-        reader = csv.DictReader(file)
-        return list(reader)
+    try:
+        with open(FILE, mode='r', newline='') as file:
+            reader = csv.DictReader(file)
+            return list(reader)
+    except FileNotFoundError:
+        print(f"Error: '{FILE}' not found. No prescriptions on record.")
+        return []
 
 
 
