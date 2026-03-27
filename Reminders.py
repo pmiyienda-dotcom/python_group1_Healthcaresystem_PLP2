@@ -10,8 +10,8 @@ def _err(msg):
 
 def send_reminders():
     try:
-        conn   = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        conn   = get_connection(dictionary=True)
+        cursor = conn.cursor()
         cursor.execute("SELECT * FROM prescriptions")
         patients = cursor.fetchall()
         cursor.close()

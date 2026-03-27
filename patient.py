@@ -1,9 +1,77 @@
-from datetime import datetime, date, timedelta
-from database import get_patient_by_name
+from datetime import datetime, date
+from database import get_connection
+
+
+def _ensure_tables():
+    """Creates the patients table if it does not already exist."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS patients (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                patient_name VARCHAR(255) NOT NULL UNIQUE
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"\n  !! ERROR: Could not ensure patients table: {e}\n")
 
 
 def get_patient_prescriptions(patient_name):
-    return get_patient_by_name(patient_name)
+    """Fetch all active prescriptions for a patient from the database."""
+    try:
+        conn = get_connection(dictionary=True)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM prescriptions WHERE LOWER(patient_name) = LOWER(%s)",
+            (patient_name,)
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"\n  !! ERROR: Could not load prescriptions: {e}\n")
+        return []
+
+
+def add_patient():
+    """Adds a new patient to the patients table."""
+    _ensure_tables()
+    print("\n  --- Add New Patient ---")
+    name = input("  Enter patient full name: ").strip()
+    if not name:
+        print("  Patient name cannot be empty.\n")
+        return
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT patient_name FROM patients WHERE LOWER(patient_name) = LOWER(%s)",
+            (name,)
+        )
+        if cursor.fetchone():
+            print(f"\n  Patient '{name}' is already registered.\n")
+            cursor.close()
+            conn.close()
+            return
+        cursor.execute("INSERT INTO patients (patient_name) VALUES (%s)", (name,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        print(f"\n  Patient '{name}' added successfully.\n")
+    except Exception as e:
+        print(f"\n  !! ERROR: Could not add patient: {e}\n")
+
+
+def assign_medication():
+    """Assigns a medication (prescription) to a patient."""
+    from prescription import add_prescription
+    add_prescription()
 
 
 def view_medication_schedule(patient_name):

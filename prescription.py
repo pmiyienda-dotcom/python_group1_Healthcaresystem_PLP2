@@ -97,8 +97,8 @@ def add_prescription():
 def view_patient_prescriptions(patient_name):
     print("\n--- Medication Schedule ---")
     try:
-        conn   = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        conn   = get_connection(dictionary=True)
+        cursor = conn.cursor()
         cursor.execute(
             "SELECT * FROM prescriptions WHERE LOWER(patient_name) = LOWER(%s)",
             (patient_name,)
@@ -132,8 +132,8 @@ def check_reminders(patient_name):
     current_time = datetime.datetime.now().strftime("%H:%M")
 
     try:
-        conn   = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        conn   = get_connection(dictionary=True)
+        cursor = conn.cursor()
         cursor.execute(
             "SELECT * FROM prescriptions WHERE LOWER(patient_name) = LOWER(%s)",
             (patient_name,)
