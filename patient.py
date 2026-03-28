@@ -13,10 +13,6 @@ def _ensure_tables():
                 patient_name VARCHAR(255) NOT NULL UNIQUE
             )
         """)
-        # Fix existing tables where patient_id lacks AUTO_INCREMENT
-        cursor.execute("""
-            ALTER TABLE patients MODIFY COLUMN patient_id INT AUTO_INCREMENT
-        """)
         conn.commit()
         cursor.close()
         conn.close()
@@ -103,7 +99,7 @@ def check_reminders(patient_name):
     upcoming, missed = [], []
 
     for p in prescriptions:
-        for t in p["schedule_times"].split(","):
+        for t in (p.get("schedule_times") or "").split(","):
             t = t.strip()
             try:
                 scheduled = datetime.strptime(f"{today_str} {t}", "%Y-%m-%d %H:%M")
@@ -145,7 +141,7 @@ def acknowledge_dose(patient_name):
 
     for p in prescriptions:
         if p["medication_name"].lower() == med_name.lower():
-            times = [t.strip() for t in p["schedule_times"].split(",")]
+            times = [t.strip() for t in (p.get("schedule_times") or "").split(",")]
             if dose_time not in times:
                 print(f"\n  '{dose_time}' is not a valid scheduled time for {med_name}.")
                 print(f"  Scheduled times are: {p['schedule_times']}\n")
@@ -166,7 +162,7 @@ def view_adherence_summary(patient_name):
     print("  " + "-" * 50)
     print("  (Based on active prescriptions from the database)\n")
     for p in prescriptions:
-        times_count = len(p["schedule_times"].split(","))
+        times_count = len((p.get("schedule_times") or "").split(","))
         expected = times_count * 7
         print(f"  {p['medication_name']:<20} {times_count} dose(s)/day — {expected} expected this week")
     print()

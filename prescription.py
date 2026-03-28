@@ -14,6 +14,31 @@ def _err(msg):
     print()
 
 
+def _ensure_tables():
+    """Creates the prescriptions table if it does not already exist."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS prescriptions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                patient_name VARCHAR(255) NOT NULL,
+                medication_name VARCHAR(255) NOT NULL,
+                dosage VARCHAR(100),
+                frequency VARCHAR(100),
+                schedule_times VARCHAR(255),
+                prescribed_by VARCHAR(255),
+                prescribed_date DATE,
+                end_date DATE
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"\n  !! ERROR: Could not ensure prescriptions table: {e}\n")
+
+
 # ─────────────────────────────────────────────
 #  ADD PRESCRIPTION
 # ─────────────────────────────────────────────
@@ -28,6 +53,8 @@ def add_prescription():
     schedule_times  = input("Enter times (e.g. 08:00,20:00): ").strip()
     prescribed_by   = input("Prescribed by           : ").strip()
     end_date        = input("Enter end date (YYYY-MM-DD): ").strip()
+
+    _ensure_tables()
 
     if not patient_name or not medication_name:
         _err("Patient name and medication name cannot be empty.")
