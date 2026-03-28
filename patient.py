@@ -9,8 +9,18 @@ def _ensure_tables():
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS patients (
-                patient_id INT AUTO_INCREMENT PRIMARY KEY,
-                patient_name VARCHAR(255) NOT NULL UNIQUE
+                patient_id VARCHAR(10) NOT NULL PRIMARY KEY,
+                patient_name VARCHAR(100),
+                age INT,
+                gender VARCHAR(10),
+                phone VARCHAR(20),
+                medication_name VARCHAR(100),
+                dosage VARCHAR(50),
+                frequency VARCHAR(50),
+                schedule_times TEXT,
+                prescribed_by VARCHAR(100),
+                prescribed_date DATE,
+                end_date DATE
             )
         """)
         conn.commit()
@@ -47,6 +57,16 @@ def add_patient():
         print("  Patient name cannot be empty.\n")
         return
 
+    age_str = input("  Enter age: ").strip()
+    gender = input("  Enter gender (Male/Female/Other): ").strip()
+    phone = input("  Enter phone number: ").strip()
+
+    try:
+        age = int(age_str) if age_str else None
+    except ValueError:
+        print("  Invalid age entered. Age not saved.\n")
+        age = None
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -59,7 +79,13 @@ def add_patient():
             cursor.close()
             conn.close()
             return
-        cursor.execute("INSERT INTO patients (patient_name) VALUES (%s)", (name,))
+        cursor.execute("SELECT COUNT(*) FROM patients")
+        count = cursor.fetchone()[0]
+        patient_id = f"P{count + 1:03d}"
+        cursor.execute(
+            "INSERT INTO patients (patient_id, patient_name, age, gender, phone) VALUES (%s, %s, %s, %s, %s)",
+            (patient_id, name, age, gender or None, phone or None)
+        )
         conn.commit()
         cursor.close()
         conn.close()
@@ -84,7 +110,7 @@ def view_medication_schedule(patient_name):
     print(f"  {'MEDICATION':<20} {'DOSAGE':<10} {'FREQUENCY':<15} {'TIMES'}")
     print("  " + "-" * 60)
     for p in prescriptions:
-        print(f"  {p['medication_name']:<20} {p['dosage']:<10} {p['frequency']:<15} {p['schedule_times']}")
+        print(f"  {p['medication_name']:<20} {p['dosage'] or 'N/A':<10} {p['frequency'] or 'N/A':<15} {p['schedule_times'] or 'N/A'}")
     print(f"\n  Total: {len(prescriptions)} medication(s)\n")
 
 
@@ -146,6 +172,19 @@ def acknowledge_dose(patient_name):
                 print(f"\n  '{dose_time}' is not a valid scheduled time for {med_name}.")
                 print(f"  Scheduled times are: {p['schedule_times']}\n")
                 return
+            try:
+                conn = get_connection()
+                cursor = conn.cursor()
+                dose_key = f"{med_name}_{dose_time}"
+                cursor.execute(
+                    "INSERT INTO acknowledged_doses (patient_name, medication_name, dose_key) VALUES (%s, %s, %s)",
+                    (patient_name, med_name, dose_key)
+                )
+                conn.commit()
+                cursor.close()
+                conn.close()
+            except Exception as e:
+                print(f"\n  !! WARNING: Could not save acknowledgement: {e}\n")
             print(f"\n  Dose recorded: {med_name} {p['dosage']} at {dose_time}. Well done!\n")
             return
 
