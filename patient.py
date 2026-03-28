@@ -9,9 +9,13 @@ def _ensure_tables():
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS patients (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                patient_id INT AUTO_INCREMENT PRIMARY KEY,
                 patient_name VARCHAR(255) NOT NULL UNIQUE
             )
+        """)
+        # Fix existing tables where patient_id lacks AUTO_INCREMENT
+        cursor.execute("""
+            ALTER TABLE patients MODIFY COLUMN patient_id INT AUTO_INCREMENT
         """)
         conn.commit()
         cursor.close()
